@@ -1,71 +1,130 @@
 public class SimpleThreads {
 
-    // Display a message, preceded by the name of the current thread
+    // Exibe uma mensagem, precedida pelo nome da thread atual
     static void threadMessage(String message) {
         String threadName = Thread.currentThread().getName();
         System.out.format("%s: %s%n", threadName, message);
     }
 
     private static class MessageLoop
-        implements Runnable {
+            implements Runnable {
         public void run() {
             String importantInfo[] = {
-                "Mares eat oats",
-                "Does eat oats",
-                "Little lambs eat ivy",
-                "A kid will eat ivy too"
+                "Tô sem criatividade 1",
+                "Tô sem criatividade 2",
+                "Tô sem criatividade 3",
+                "Tô sem criatividade 4"
             };
             try {
                 for (int i = 0; i < importantInfo.length; i++) {
-                    // Pause for 4 seconds
+                    // Pausa por 4 segundos
                     Thread.sleep(4000);
-                    // Print a message
+                    // Exibe uma mensagem
                     threadMessage(importantInfo[i]);
                 }
             } catch (InterruptedException e) {
-                threadMessage("I wasn't done!");
+                threadMessage("Ainda não terminei!");
             }
         }
     }
 
-    public static void main(String args[])
-        throws InterruptedException {
+    /**
+     * Tarefa intensiva de CPU: encontra todos os números primos até um limite grande
+     * usando divisão exaustiva. Verifica interrupção após cada candidato
+     * para poder ser parada se ultrapassar o tempo disponível.
+     */
+    private static class PrimeCalculator
+            implements Runnable {
+        private final long limit;
 
-        // Delay, in milliseconds before we interrupt MessageLoop thread (default one hour)
+        PrimeCalculator(long limit) {
+            this.limit = limit;
+        }
+
+        public void run() {
+            threadMessage("Iniciando busca de primos até " + limit);
+            long count = 0;
+
+            for (long n = 2; n <= limit; n++) {
+
+                // Respeita pedidos de interrupção entre candidatos
+                if (Thread.interrupted()) {
+                    threadMessage("Busca de primos interrompida! Primos encontrados até agora: " + count);
+                    return;
+                }
+
+                if (isPrime(n)) {
+                    count++;
+                }
+            }
+
+            threadMessage("Busca de primos finalizada. Total de primos encontrados: " + count);
+        }
+
+        private boolean isPrime(long n) {
+            if (n < 2) return false;
+            if (n == 2) return true;
+            if (n % 2 == 0) return false;
+            for (long i = 3; i * i <= n; i += 2) {
+                if (n % i == 0) return false;
+            }
+            return true;
+        }
+    }
+
+    public static void main(String args[])
+            throws InterruptedException {
+
+        // Atraso, em milissegundos, antes de interromper a thread MessageLoop (padrão uma hora)
         long patience = 1000 * 60 * 60;
 
-        // If command line argument present, gives patience in seconds
+        // Se houver argumento na linha de comando, define a paciência em segundos
         if (args.length > 0) {
             try {
                 patience = Long.parseLong(args[0]) * 1000;
             } catch (NumberFormatException e) {
-                System.err.println("Argument must be an integer.");
+                System.err.println("O argumento deve ser um inteiro.");
                 System.exit(1);
             }
         }
 
-        threadMessage("Starting MessageLoop thread");
+        // ── Thread MessageLoop (original) (traduzi, ninguém merece...)────────────────────────────────────
+        threadMessage("Iniciando thread MessageLoop");
         long startTime = System.currentTimeMillis();
         Thread t = new Thread(new MessageLoop());
-
-	// Put the MessageLoop thread to run
         t.start();
 
-        threadMessage("Waiting for MessageLoop thread to finish");
-	
-        // loop until MessageLoop thread exits
+        threadMessage("Aguardando a thread MessageLoop terminar");
         while (t.isAlive()) {
-            threadMessage("Still waiting...");
-            // Wait maximum of 1 second for MessageLoop thread to finish
+            threadMessage("Ainda esperando...");
             t.join(1000);
             if (((System.currentTimeMillis() - startTime) > patience) && t.isAlive()) {
-                threadMessage("Tired of waiting!");
-		// Force the interruption of the MainLoop thread
+                threadMessage("Cansei de esperar!");
                 t.interrupt();
-                // ...and wait for it to finish -- shouldn't be long now 
                 t.join();
             }
         }
-        threadMessage("Finally!");
+        threadMessage("Finalmente!");
+
+        // ── Thread PrimeCalculator (nova) ─────────────────────────────────────
+        // Limite de tempo para a tarefa intensiva de CPU: 2 segundos
+        long cpuTimeLimit = 2000;
+        long primeLimit   = 2_000_000_000L; // busca primos até 2 bilhões
+
+        threadMessage("Iniciando thread PrimeCalculator (limite: " + primeLimit + ")");
+        long cpuStart = System.currentTimeMillis();
+        Thread cpuThread = new Thread(new PrimeCalculator(primeLimit));
+        cpuThread.start();
+
+        // Monitora a thread de CPU e a interrompe se ultrapassar cpuTimeLimit
+        while (cpuThread.isAlive()) {
+            cpuThread.join(500); // verifica a cada 500 ms
+            if ((System.currentTimeMillis() - cpuStart) > cpuTimeLimit && cpuThread.isAlive()) {
+                threadMessage("Limite de tempo de CPU excedido! Interrompendo PrimeCalculator...");
+                cpuThread.interrupt();
+                cpuThread.join();
+            }
+        }
+        threadMessage("Thread PrimeCalculator concluída.");
     }
 }
